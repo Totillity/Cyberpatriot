@@ -1,0 +1,16 @@
+start: part*
+
+part: "[" WORD "]" WS+ config*
+
+config: NAME "=" THING WS+ 
+
+WORD: /[^=\]\[\n]+/
+
+NAME: /[^=\]\[\n]+/
+
+THING: /[^=\]\[\n]+/
+
+WS: /\n/
+
+%import common.WS_INLINE
+%ignore WS_INLINE
