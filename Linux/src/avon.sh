@@ -322,8 +322,6 @@ automaticusersprep() {
   chmod 777 $dump/readme
 
   readmeurl=`cat /home/$SUDO_USER/Desktop/README.desktop | grep -o '".*"' | tr -d '"'`
-  readmeurl=${readmeurl:4}
-  readmeurl="https"$readmeurl
   curl $readmeurl -k > $dump/readme
 }
 
@@ -361,7 +359,7 @@ unauthorizedadministrators() {
   	cat $dump/authadmin | grep ^$user
   	if [ $? = 1 ]; then
   		log $user is not supposed to be an admin. Demoting $user
-  		deluser $user
+  		deluser $user sudo
   		echo The admin privileges of $user has been revoked >> $dump/demotedadmins
       log The admin privileges of $user has been revoked
   	fi
@@ -685,8 +683,8 @@ avon_generic() {
   serviceconfiguration
   killavahidaemon
   purges
-  updates
   bindnine
+  updates
 }
 
 avon_ubuntu14() {
@@ -708,13 +706,13 @@ avon_debian() {
 currentoperatingsystem=`cat /etc/os-release | grep "PRETTY_NAME" | grep -o '".*"' | sed 's/"//g'`
 
 if [[ $currentoperatingsystem == *14.04* ]]; then
-  ubuntu14
+  avon_ubuntu14
 fi
 
 if [[ $currentoperatingsystem == *16.04* ]]; then
-  ubuntu16
+  avon_ubuntu16
 fi
 
 if [[ $currentoperatingsystem == *Debian* ]]; then
-  debian
+  avon_debian
 fi
