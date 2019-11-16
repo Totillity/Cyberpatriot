@@ -5,6 +5,7 @@ import pathlib
 
 import lark
 
+
 def pretty(tree, indent=0):
     if isinstance(tree, lark.Token):
         if tree != "\n":
@@ -72,6 +73,8 @@ def main():
 
     config_path = pathlib.Path("data.inf")
     result = subprocess.run(["secedit", "/export", "/cfg", str(config_path)])
+
+    print(result)
 
     with config_path.open("r") as config:
         contents = config.read().encode("utf-8").decode("utf-16")[2:]
