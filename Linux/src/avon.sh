@@ -31,24 +31,28 @@ autoupdate() {
 sourcing_14() {
   log "Using most trustworthy sources in source.list"
   cat presets/14.04sources.list > /etc/apt/sources.list
+  apt-get update
 }
 
 # Secure sourcing for 16
 sourcing_16() {
   log "Using most trustworthy sources in source.list"
   cat presets/16sources.list > /etc/apt/sources.list
+  apt-get update
 }
 
 # Secure sourcing for Debian Jessie (8)
 sourcing_jessie() {
   log "Using most trustworthy sources in source.list"
   cat presets/jessiesources.list > /etc/apt/sources.list
+  apt-get update
 }
 
 # Secure sourcing for Debian Stretch (9)
 sourcing_stretch() {
   log "Using most trustworthy sources in source.list"
   cat presets/stretchsources.list > /etc/apt/sources.list
+  apt-get update
 }
 
 
@@ -68,11 +72,23 @@ firefox() {
   log "Updating Firefox"
   killall firefox
   mv ~/.mozilla ~/.mozilla.old
-  apt-get purge firefox
-  apt-get install firefox
+  apt-get purge -y firefox
+  apt-get install -y firefox
   log "Configuring Firefox"
   killall firefox
   cat presets/syspref.js > /etc/firefox/syspref.js
+  su -c 'firefox -new-tab about:config' $SUDO_USER
+}
+
+firefox_debian() {
+  log "Updating Firefox"
+  killall firefox
+  mv ~/.mozilla ~/.mozilla.old
+  apt-get purge -y firefox-esr
+  apt-get install -y firefox-esr
+  log "Configuring Firefox"
+  killall firefox
+  cat presets/syspref.js > /etc/firefox-esr/syspref.js
   su -c 'firefox -new-tab about:config' $SUDO_USER
 }
 
@@ -332,18 +348,28 @@ unauthorizedusers() {
   echo root >> $dump/usersover1000
   echo > $dump/removedusers
   for user in `cat $dump/usersover1000`; do
-  	if [ $user = "root" ]; then
-  		log ROOT FOUND
-  	else
-  		cat $dump/readme | grep ^$user
-  		if [ $? = 1 ]; then
-  			log "$user is unauthorized. Removing..."
-  			userdel $user
-  			echo "$user has been removed from the system" >> $dump/removedusers
+      if [ $user = "root" ]; then
+          log ROOT FOUND
+      else
+          cat $dump/readme | grep ^$user
+          if [ $? = 1 ]; then
+              log "$user is unauthorized. Removing..."
+              userdel $user
+              echo "$user has been removed from the system" >> $dump/removedusers
         log "$user has been removed from the system"
-  		fi
-  	fi
+          fi
+      fi
   done
+
+  cat $dump/readme | grep -w 'new member\|recruited'
+  if [ $? = 0 ]; then
+      echo "New user must be added. Enter his/her username"
+      read username
+      useradd $username
+      echo -e "$stdpass\n$stdpass" | passwd $username
+      echo "$username has been added"
+      log "Added new user and set his password"
+  fi
 }
 
 # Remove unauthorized administrators
@@ -356,13 +382,13 @@ unauthorizedadministrators() {
   echo "" > $dump/demotedadmins
   chmod 777 $dump/demotedadmins
   for user in `cat $dump/adminusers`; do
-  	cat $dump/authadmin | grep ^$user
-  	if [ $? = 1 ]; then
-  		log $user is not supposed to be an admin. Demoting $user
-  		deluser $user sudo
-  		echo The admin privileges of $user has been revoked >> $dump/demotedadmins
+      cat $dump/authadmin | grep ^$user
+      if [ $? = 1 ]; then
+          log $user is not supposed to be an admin. Demoting $user
+          deluser $user sudo
+          echo The admin privileges of $user has been revoked >> $dump/demotedadmins
       log The admin privileges of $user has been revoked
-  	fi
+      fi
   done
 }
 
@@ -392,49 +418,49 @@ uidcheck() {
 
   cut -d: -f1,3 /etc/passwd | egrep ':0$' | cut -d: -f1 | grep -v root > $dump/zeroUIDUsers
   if [ -s $dump/zeroUIDUsers ]
-  	then
-  		echo "Found 0 UID. Fixing now."
+      then
+          echo "Found 0 UID. Fixing now."
 
-  		while IFS='' read -r line || [[ -n "$line" ]]; do
-  			thing=1
-  			while true; do
-  				rand=$((RANDOM%999+1000))
-  				cut -d: -f1,3 /etc/passwd | egrep ":$rand$" | cut -d: -f1 > $dump/UIDUsers
-  				if [ -s $dump/UIDUsers ]
-  				then
-  					echo "Couldn't find unused UID. Trying Again..."
+          while IFS='' read -r line || [[ -n "$line" ]]; do
+              thing=1
+              while true; do
+                  rand=$((RANDOM%999+1000))
+                  cut -d: -f1,3 /etc/passwd | egrep ":$rand$" | cut -d: -f1 > $dump/UIDUsers
+                  if [ -s $dump/UIDUsers ]
+                  then
+                      echo "Couldn't find unused UID. Trying Again..."
             continue
-  				else
-  					break
-  				fi
-  			done
-  			usermod -u $rand -g $rand -o $line
-  			touch $dump/oldstring
-  			old=$(grep "$line" /etc/passwd)
-  			echo $old > $dump/oldstring
-  			sed -i "s~0:0~$rand:$rand~" $dump/oldstring
-  			new=$(cat $dump/oldstring)
-  			sed -i "s~$old~$new~" /etc/passwd
-  			log "ZeroUID User: $line"
-  			log "Assigned UID: $rand"
-  		done < "/zeroUIDUsers"
-  		cut -d: -f1,3 /etc/passwd | egrep ':0$' | cut -d: -f1 | grep -v root > $dump/zeroUIDUsers
+                  else
+                      break
+                  fi
+              done
+              usermod -u $rand -g $rand -o $line
+              touch $dump/oldstring
+              old=$(grep "$line" /etc/passwd)
+              echo $old > $dump/oldstring
+              sed -i "s~0:0~$rand:$rand~" $dump/oldstring
+              new=$(cat $dump/oldstring)
+              sed -i "s~$old~$new~" /etc/passwd
+              log "ZeroUID User: $line"
+              log "Assigned UID: $rand"
+          done < "/zeroUIDUsers"
+          cut -d: -f1,3 /etc/passwd | egrep ':0$' | cut -d: -f1 | grep -v root > $dump/zeroUIDUsers
 
-  		if [ -s $dump/zeroUIDUsers ]
-  		then
-  			echo "WARNING: UID CHANGE UNSUCCESSFUL!"
-  		else
-  			echo "Successfully Changed Zero UIDs!"
-  		fi
-  	else
-  		echo "No Zero UID Users"
-  	fi
+          if [ -s $dump/zeroUIDUsers ]
+          then
+              echo "WARNING: UID CHANGE UNSUCCESSFUL!"
+          else
+              echo "Successfully Changed Zero UIDs!"
+          fi
+      else
+          echo "No Zero UID Users"
+      fi
 }
 
 # Pure FTPD Configuration
 pureftpd() {
   log "Evaluating compulsory status of pure-ftpd"
-  cat $copydir/readme | grep -w 'pure-ftpd'
+  cat $dump/readme | grep -w 'pure-ftpd'
   if [ $? = 0 ]; then
     apt-get install -y pure-ftpd
     mkdir /etc/ssl/private
@@ -452,7 +478,7 @@ pureftpd() {
 
 # VSFTP Configuration
 vsftp() {
-  if $vsftp = "y" ; then
+  if [ $vsftp = "y" ] ; then
     # Disable anonymous uploads
     sed -i '/^anon_upload_enable/ c\anon_upload_enable no' /etc/vsftpd.conf
     sed -i '/^anonymous_enable/ c\anonymous_enable=NO' /etc/vsftpd.conf
@@ -466,7 +492,7 @@ vsftp() {
 
 # MySQL Configuration
 mysql() {
-  if $mysql = "y"; then
+  if [ $mysql = "y" ]; then
     # Disable remote access
     sed -i '/bind-address/ c\bind-address = 127.0.0.1' /etc/mysql/my.cnf
     service mysql restart
@@ -477,12 +503,12 @@ mysql() {
 
 # Apache2 Configuration
 apachetwo() {
-  if $apachetwo = "y"; then
+  if [ $apachetwo = "y" ]; then
     cat presets/apache2.conf >> /etc/apache2/apache2.conf
     a2enmod userdir
 
-  	chown -R root:root /etc/apache2
-  	chown -R root:root /etc/apache
+      chown -R root:root /etc/apache2
+      chown -R root:root /etc/apache
 
     a2enmod rewrite
 
@@ -515,7 +541,7 @@ apachetwo() {
 
 # PHP Configuration
 phpconfiguration() {
-  if $php = "y" ; then
+  if [ $php = "y" ] ; then
     log "Make sure you go to the Application Checklists document and go through the checklist for PHP. Press enter to continue"
     read trash
     php Meta/phpconfigcheck.php -a -h > $copydir/phpSecurity.html
@@ -526,7 +552,7 @@ phpconfiguration() {
 
 # Bind9 Configuration
 bindnine() {
-  if $bindnine = "y"; then
+  if [ $bindnine = "y" ]; then
     apt-get update bind9 bind9-host
     ps aux | grep bind | grep -v '^root' # Ensure Bind9 is running with non-root account
     # Permission and ownership modifications
@@ -542,7 +568,7 @@ bindnine() {
 
 # nginx Configuration
 nginx() {
-  if $nginx = "y" ; then
+  if [ $nginx = "y" ]; then
     # Check TODO #3 at the top
     continue
   else
@@ -567,10 +593,10 @@ sshservice() {
       groupadd sshusers
       cut -d: -f1,3 /etc/passwd | egrep ':[0-9]{4}$' | cut -d: -f1 > $dump/usersover1000
       for user in `cat $dump/usersover1000`; do
-      	cat $dump/readme | grep ^$user
-      	if [ $? = 0 ]; then
-    			usermod -a -G sshusers $user
-      	fi
+          cat $dump/readme | grep ^$user
+          if [ $? = 0 ]; then
+                usermod -a -G sshusers $user
+          fi
       done
       echo "AllowGroups sshusers" >> /etc/ssh/sshd_config
 
@@ -633,22 +659,22 @@ updates() {
 # Establish configuration variables
 configvars() {
 
-  echo "Secure VSFTP? (y/n)\t"
+  echo "Secure VSFTP? (y/n)"
   read vsftp
 
-  echo "Secure MySQL (y/n)\t"
+  echo "Secure MySQL (y/n)"
   read mysql
 
-  echo "Secure Apache2 (y/n)\t"
+  echo "Secure Apache2 (y/n)"
   read apachetwo
 
-  echo "Secure PHP (y/n)\t"
+  echo "Secure PHP (y/n)"
   read php
 
-  echo "Secure Bind9 (y/n)\t"
+  echo "Secure Bind9 (y/n)"
   read bindnine
 
-  echo "Secure nginx (y/n)\t"
+  echo "Secure nginx (y/n)"
   read nginx
 }
 
@@ -656,7 +682,6 @@ avon_generic() {
   configvars
   autoupdate
   dependencies
-  firefox
   rkhunterrun
   hosts
   firewall
@@ -688,18 +713,21 @@ avon_generic() {
 }
 
 avon_ubuntu14() {
-  avon_generic
   sourcing_14
+  firefox
+  avon_generic
 }
 
 avon_ubuntu16() {
-  avon_generic
   sourcing_16
+  firefox
+  avon_generic
 }
 
 avon_debian() {
-  avon_generic
   sourcing_jessie # CP generally uses Debian 8 (Jessie)
+  firefox_debian
+  avon_generic
 }
 
 
