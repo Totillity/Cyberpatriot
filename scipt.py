@@ -4,7 +4,7 @@ import ctypes
 import subprocess
 
 from abc import ABC, abstractmethod
-from typing import List, IO, Callable, Union, Dict
+from typing import List, IO, Callable, Union
 
 if os.name == 'nt':
     import winreg
@@ -89,11 +89,10 @@ class Task(ABC):
             raise TypeError('Val must be a int or str')
 
     @classmethod
-    def set_services(cls, services: Dict[str, bool], force_hide=False):
-        for service, enabled in services.items():
-            cls.run(["sc", f"config", service, f"start={'enabled' if enabled else 'disabled'}"], force_hide=force_hide)
-            if not enabled:
-                cls.run([f"sc", "stop", service], force_hide=force_hide)
+    def set_service(cls, service: str, enabled: bool, force_hide=False):
+        cls.run(["sc", f"config", service, f"start={'enabled' if enabled else 'disabled'}"], force_hide=force_hide)
+        if not enabled:
+            cls.run([f"sc", "stop", service], force_hide=force_hide)
 
     @classmethod
     def disable_features(cls, features: List[str]):
@@ -153,9 +152,6 @@ class CheckPermissions(Task):
 class DisableRDP(Task):
     task_name = "Setting RDP"
 
-    REG_PATH = r"SYSTEM\CurrentControlSet\Control\Terminal Server"
-    REG_KEY = r"fDenyTSConnections"
-
     def __init__(self):
         inp = self.get_input("Disable RDP? (y/n) ", validator="y/n")
         if inp.lower() == "y":
@@ -165,17 +161,20 @@ class DisableRDP(Task):
 
     def check(self):
         if self.do:
-            self.set_reg_key(self.REG_PATH, self.REG_KEY, 1)
-            self.set_services({'iphlpsvc': False, 'umrdpservice': False, 'termservice': False})
+            self.set_reg_key(r"SYSTEM\CurrentControlSet\Control\Terminal Server", r"fDenyTSConnections", 1)
+            for service, enabled in {'iphlpsvc': False, 'umrdpservice': False, 'termservice': False}.items():
+                self.set_service(service, enabled)
             self.log("Disabled RDP")
         else:
-            self.set_reg_key(self.REG_PATH, self.REG_KEY, 0)
-            self.set_reg_key(r"System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp", "UserAuthentication", 1)
+            self.set_reg_key(r"SYSTEM\CurrentControlSet\Control\Terminal Server", r"fDenyTSConnections", 0)
+            self.set_reg_key(r"System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp",
+                             "UserAuthentication", 1)
 
             self.log("Enabled RDP")
 
         self.set_reg_key(r"SYSTEM\ControlSet001\Control\Remote Assistance", "CreateEncryptedOnlyTickets", 1)
-        self.set_reg_key(r"System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp", "fDisableEncryption", 0)
+        self.set_reg_key(r"System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp",
+                         "fDisableEncryption", 0)
         self.set_reg_key(r"SYSTEM\ControlSet001\Control\Remote Assistance", "fAllowFullControl", 0)
         self.set_reg_key(r"SYSTEM\ControlSet001\Control\Remote Assistance", "fAllowToGetHelp", 0)
         self.set_reg_key(r"System\CurrentControlSet\Control\Terminal Server", "AllowRemoteRPC", 0)
@@ -248,7 +247,7 @@ netsh advfirewall firewall add rule name="block_WSearch_out" dir=out service="WS
     def check(self):
         total = len(self.FIREWALL_CMD.splitlines())
         for n, cmd in enumerate(self.FIREWALL_CMD.splitlines()):
-            self.run(cmd.split(), force_hide=True)
+            self.run(cmd.split())
             self.progress_bar(self.task_name, n, total)
         self.log("Done enabling firewall", start="\n")
 
@@ -256,9 +255,22 @@ netsh advfirewall firewall add rule name="block_WSearch_out" dir=out service="WS
 class WeakStuff(Task):
     task_name = "Disabling Weak Programs"
 
-    features = ['IIS-WebServerRole', 'IIS-WebServer', 'IIS-CommonHttpFeatures', 'IIS-HttpErrors', 'IIS-HttpRedirect', 'IIS-ApplicationDevelopment', 'IIS-NetFxExtensibility', 'IIS-NetFxExtensibility45', 'IIS-HealthAndDiagnostics', 'IIS-HttpLogging', 'IIS-LoggingLibraries', 'IIS-RequestMonitor', 'IIS-HttpTracing', 'IIS-Security', 'IIS-URLAuthorization', 'IIS-RequestFiltering', 'IIS-IPSecurity', 'IIS-Performance', 'IIS-HttpCompressionDynamic', 'IIS-WebServerManagementTools', 'IIS-ManagementScriptingTools', 'IIS-IIS6ManagementCompatibility', 'IIS-Metabase', 'IIS-HostableWebCore', 'IIS-StaticContent', 'IIS-DefaultDocument', 'IIS-DirectoryBrowsing', 'IIS-WebDAV', 'IIS-WebSockets', 'IIS-ApplicationInit', 'IIS-ASPNET', 'IIS-ASPNET45', 'IIS-ASP', 'IIS-CGI', 'IIS-ISAPIExtensions', 'IIS-ISAPIFilter', 'IIS-ServerSideIncludes', 'IIS-CustomLogging', 'IIS-BasicAuthentication', 'IIS-HttpCompressionStatic', 'IIS-ManagementConsole', 'IIS-ManagementService', 'IIS-WMICompatibility', 'IIS-LegacyScripts', 'IIS-LegacySnapIn', 'IIS-FTPServer', 'IIS-FTPSvc', 'IIS-FTPExtensibility', 'TelnetClient', 'TFTP', 'TelnetServer']
+    features = ['IIS-WebServerRole', 'IIS-WebServer', 'IIS-CommonHttpFeatures', 'IIS-HttpErrors', 'IIS-HttpRedirect',
+                'IIS-ApplicationDevelopment', 'IIS-NetFxExtensibility', 'IIS-NetFxExtensibility45',
+                'IIS-HealthAndDiagnostics', 'IIS-HttpLogging', 'IIS-LoggingLibraries', 'IIS-RequestMonitor',
+                'IIS-HttpTracing', 'IIS-Security', 'IIS-URLAuthorization', 'IIS-RequestFiltering', 'IIS-IPSecurity',
+                'IIS-Performance', 'IIS-HttpCompressionDynamic', 'IIS-WebServerManagementTools',
+                'IIS-ManagementScriptingTools', 'IIS-IIS6ManagementCompatibility', 'IIS-Metabase',
+                'IIS-HostableWebCore', 'IIS-StaticContent', 'IIS-DefaultDocument', 'IIS-DirectoryBrowsing',
+                'IIS-WebDAV', 'IIS-WebSockets', 'IIS-ApplicationInit', 'IIS-ASPNET', 'IIS-ASPNET45', 'IIS-ASP',
+                'IIS-CGI', 'IIS-ISAPIExtensions', 'IIS-ISAPIFilter', 'IIS-ServerSideIncludes', 'IIS-CustomLogging',
+                'IIS-BasicAuthentication', 'IIS-HttpCompressionStatic', 'IIS-ManagementConsole',
+                'IIS-ManagementService', 'IIS-WMICompatibility', 'IIS-LegacyScripts', 'IIS-LegacySnapIn',
+                'IIS-FTPServer', 'IIS-FTPSvc', 'IIS-FTPExtensibility', 'TelnetClient', 'TFTP', 'TelnetServer']
 
-    bitch_services = ['tapisrv', 'bthserv', 'mcx2svc', 'remoteregistry', 'seclogon', 'telnet', 'tlntsvr', 'p2pimsvc', 'simptcp', 'fax', 'msftpsvc', 'nettcpportsharing', 'iphlpsvc', 'lfsvc', 'bthhfsrv', 'irmon', 'sharedaccess', 'xblauthmanager', 'xblgamesave', 'xboxnetapisvc']
+    bitch_services = ['tapisrv', 'bthserv', 'mcx2svc', 'remoteregistry', 'seclogon', 'telnet', 'tlntsvr', 'p2pimsvc',
+                      'simptcp', 'fax', 'msftpsvc', 'nettcpportsharing', 'iphlpsvc', 'lfsvc', 'bthhfsrv', 'irmon',
+                      'sharedaccess', 'xblauthmanager', 'xblgamesave', 'xboxnetapisvc']
 
     def __init__(self):
         pass
@@ -266,13 +278,13 @@ class WeakStuff(Task):
     def check(self):
         total = len(self.features)
         for n, feature in enumerate(self.features):
-            self.run(["dism", "/online", "/disable-feature", f"/featurename:{feature}", "/NoRestart"], force_hide=True)
+            self.run(["dism", "/online", "/disable-feature", f"/featurename:{feature}", "/NoRestart"])
             self.progress_bar(self.task_name, n, total)
         self.log("Disabled weak services", start="\n")
 
         total = len(self.bitch_services)
         for n, bitch in enumerate(self.bitch_services):
-            self.set_services({bitch: False}, force_hide=True)
+            self.set_service(bitch, False)
             self.progress_bar(self.task_name, n, total)
         self.log("Burned processes at the stake", start="\n")
 
