@@ -20,7 +20,7 @@ function removeUnauthorizedUsers() {
     $readme = Get-Content ($DUMP + "readme.txt")
     Get-LocalUser | ForEach-Object {
         $currentUser = $_.ToString()
-        if ($currentUser.contains("Administrator") -or $currentUser.contains("DefaultAccount") -or $currentUser.contains("Guest") -or $currentUser.contains("WDAGUtilityAccount")) {
+        if ($currentUser.contains("Administrator") -or $currentUser.contains("DefaultAccount") -or $currentUser.contains("Guest") -or $currentUser.contains("WDAGUtilityAccount") -or $currentUser.contains("Big Boi") -or $currentUser.contains("Small Boi")) {
             echo "Built-In Account detected"
         } else {
             $authorizedUser = $readme | Select-String -Pattern $currentUser.TrimEnd() -Quiet
@@ -47,7 +47,7 @@ function demoteUnauthorizedAdministrators() {
     }
     Get-LocalGroupMember -Group "Administrators" | ForEach-Object {
         $localAdmin = (($_ -split "\\")[1])
-        if ($localAdmin.contains("Administrator")) {
+        if ($localAdmin.contains("Administrator") -or $localAdmin.contains("Big Boi")) {
             Write-Host "Built-In Account Detected"
         } else {
             $isAuthorized = $authorizedAdmin | Select-String -Pattern $localAdmin -Quiet
