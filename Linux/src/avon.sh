@@ -24,7 +24,8 @@ fi
 # Automatic updates
 autoupdate() {
   log "Enabling automatic updates"
-  cat presets/auto-upgrades > /etc/apt/apt.conf.d/20auto-upgrades
+  cat presets/20auto-upgrades > /etc/apt/apt.conf.d/20auto-upgrades
+  cat presets/50unattended-upgrades > /etc/apt/apt.conf.d/50unattended-upgrades
 }
 
 # Secure sourcing for 14.04
@@ -94,7 +95,7 @@ firefox_debian() {
 
 # RKHunter
 rkhunterrun() {
-  rkhunter --update --propupd
+  rkhunter --update --propupd -c
 }
 
 # Configure hosts files
@@ -139,10 +140,10 @@ auditing() {
   auditctl -e 1
 }
 
-# Configure root password
-rootpassword() {
-  log "Changing the root password. Make sure you document it"
-  passwd root
+# Lock root account
+lockroot() {
+  log "Locking root account"
+  passwd -l root
 }
 
 # Configure cron to allow root access only
@@ -331,6 +332,18 @@ unwantedmedia() {
   mediawarrant jpeg
 }
 
+fileperms() {
+  chmod u=rw,g=r,o=r /etc/group      # -rw-r--r--   1 root root    1424 Dec  1 10:35 group
+  chmod u=rw,g=r /etc/gshadow    # -rw-r-----   1 root shadow  1192 Dec  1 10:35 gshadow
+  chmod u=rw,g=r,o=r /etc/hostname   # -rw-r--r--   1 root root       7 Dec  1 08:42 hostname
+  chmod u=rw,g=r,o=r /etc/hosts      # -rw-r--r--   1 root root     221 Dec  1 08:42 hosts
+  chmod u=rw,g=r,o=r /etc/passwd     # -rw-r--r--   1 root root    3189 Dec  1 11:06 passwd
+  chmod u=rw,g=r /etc/shadow     # -rw-r-----   1 root shadow  1787 Dec  1 11:06 shadow
+  chmod u=r,g=r  /etc/sudoers    # -r--r-----   1 root root     755 Jul  4  2017 sudoers
+  chmod u=rwx,g=rx,o=rx /etc/sudoers.d  # drwxr-xr-x   2 root root    4096 Feb 26  2019 sudoers.d
+
+}
+
 # Copy & parse README
 automaticusersprep() {
   log "Copying & parsing README"
@@ -363,10 +376,10 @@ unauthorizedusers() {
 
   cat $dump/readme | grep -w 'new member\|recruited'
   if [ $? = 0 ]; then
-      echo "New user must be added. Enter his/her username"
-      read username
+      username=$(cat $dump/readme | grep -o '^&quot;.*&quot;' | sed -n '2 p' | sed -e 's/&quot;\(.*\)&quot;/\1/')
       useradd $username
       echo -e "$stdpass\n$stdpass" | passwd $username
+      passwd --expire $username
       echo "$username has been added"
       log "Added new user and set his password"
   fi
@@ -679,9 +692,11 @@ configvars() {
 }
 
 avon_generic() {
+  fileperms
   configvars
-  autoupdate
+  purges
   dependencies
+  autoupdate
   rkhunterrun
   hosts
   firewall
@@ -689,7 +704,7 @@ avon_generic() {
   rclocal
   telnet
   auditing
-  rootpassword
+  lockroot
   cronrootonly
   disableguestacc
   passwordpolicies
@@ -707,7 +722,6 @@ avon_generic() {
   uidcheck
   serviceconfiguration
   killavahidaemon
-  purges
   bindnine
   updates
 }
